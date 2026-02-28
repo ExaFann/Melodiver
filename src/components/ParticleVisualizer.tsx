@@ -6,7 +6,7 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ParticleSettings, MappingMode, ChannelRouting } from '@/types/music';
 
-const PARTICLE_COUNT = 5000;
+const PARTICLE_COUNT = 10000;
 
 function applyTransferFunction(energy: number, mode: MappingMode): number {
   switch (mode) {
@@ -59,9 +59,9 @@ function ParticleScene({ analyserNode, settings }: ParticleSceneProps) {
   const positions = useMemo(() => {
     const arr = new Float32Array(PARTICLE_COUNT * 3);
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * 15;
-      arr[i * 3 + 1] = (Math.random() - 0.5) * 15;
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 15;
+      arr[i * 3] = (Math.random() - 0.5) * 50;
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 50;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 50;
     }
     return arr;
   }, []);
@@ -182,7 +182,7 @@ export default function ParticleVisualizer({ analyserNode, settings }: ParticleV
   return (
     <div className="particle-canvas-container">
       <Canvas
-        camera={{ position: [0, 0, 12], fov: 60 }}
+        camera={{ position: [0, 0, 30], fov: 60 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >

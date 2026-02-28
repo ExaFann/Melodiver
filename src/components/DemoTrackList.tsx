@@ -1,6 +1,7 @@
 'use client';
 
-import { Music, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Music, Trash2, Pencil, Check } from 'lucide-react';
 import type { Track } from '@/types/music';
 
 interface DemoTrackListProps {
@@ -8,6 +9,7 @@ interface DemoTrackListProps {
   currentTrack: Track | null;
   onSelectTrack: (track: Track) => void;
   onDeleteTrack: (trackId: string) => void;
+  onUpdateTrack: (trackId: string, field: 'title' | 'artist', value: string) => void;
   isPlaying: boolean;
 }
 
@@ -18,11 +20,80 @@ function formatTime(seconds?: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function EditableField({
+  value,
+  placeholder,
+  onSave,
+  className,
+}: {
+  value: string;
+  placeholder: string;
+  onSave: (v: string) => void;
+  className: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    onSave(trimmed);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <span className={`${className} editing`} onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          className="editable-input"
+          value={draft}
+          placeholder={placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+          }}
+          onBlur={commit}
+        />
+        <button className="editable-confirm" onMouseDown={commit} title="Confirm">
+          <Check size={10} />
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className={className}>
+      <span className="editable-text">{value || placeholder}</span>
+      <button
+        className="editable-edit-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          setDraft(value);
+          setEditing(true);
+        }}
+        title="Edit"
+      >
+        <Pencil size={10} />
+      </button>
+    </span>
+  );
+}
+
 export default function DemoTrackList({
   tracks,
   currentTrack,
   onSelectTrack,
   onDeleteTrack,
+  onUpdateTrack,
   isPlaying,
 }: DemoTrackListProps) {
   if (tracks.length === 0) {
@@ -55,8 +126,30 @@ export default function DemoTrackList({
               )}
             </div>
             <div className="playlist-item-info">
-              <span className="playlist-item-title">{track.title}</span>
-              <span className="playlist-item-artist">{track.artist}</span>
+              <EditableField
+                value={track.title}
+                placeholder="Untitled"
+                onSave={(v) => onUpdateTrack(track.id, 'title', v || 'Untitled')}
+                className="playlist-item-title"
+              />
+              {track.artist ? (
+                <EditableField
+                  value={track.artist}
+                  placeholder="Add artist"
+                  onSave={(v) => onUpdateTrack(track.id, 'artist', v)}
+                  className="playlist-item-artist"
+                />
+              ) : (
+                <span
+                  className="playlist-item-artist add-artist-hint"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateTrack(track.id, 'artist', ' ');
+                  }}
+                >
+                  + Add artist
+                </span>
+              )}
             </div>
             <span className="playlist-item-duration">
               {formatTime(track.duration)}

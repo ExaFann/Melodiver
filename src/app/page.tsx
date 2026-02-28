@@ -3,11 +3,13 @@
 import { useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Play, Pause, Square, Upload, Volume2, Music, Menu, X,
+  Play, Pause, Square, Upload, Volume2, Music, Menu, X, ChevronDown, ChevronUp, LogOut, User,
 } from 'lucide-react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { useAuth } from '@/hooks/useAuth';
 import Visualizer from '@/components/Visualizer';
 import DemoTrackList from '@/components/DemoTrackList';
+import AuthPage from '@/components/AuthPage';
 import type {
   Track,
   VisualizerTab,
@@ -31,6 +33,8 @@ function formatTime(seconds: number): string {
 }
 
 export default function HomePage() {
+  const { user, isLoading, logout } = useAuth();
+
   // ─── Tracks & Playback ───
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -65,6 +69,33 @@ export default function HomePage() {
     channelRouting: 'normal',
   });
 
+  const [formulaOpen, setFormulaOpen] = useState(false);
+
+  // ─── Formula Descriptions ───
+  const transferFormulas: Record<MappingMode, { label: string; formula: string; desc: string }> = {
+    linear:      { label: 'Linear',      formula: 'f(E) = E',                         desc: 'Direct 1:1 mapping' },
+    exponential: { label: 'Exponential', formula: 'f(E) = E³',                        desc: 'Quiet segments suppressed, peaks amplified' },
+    threshold:   { label: 'Threshold',   formula: 'f(E) = E > 0.3 ? 1.0 : 0.0',      desc: 'Binary on/off, rhythmic flicker' },
+    harmonic:    { label: 'Harmonic',    formula: 'f(E) = (sin(E·2π) + 1) / 2',       desc: 'Sinusoidal oscillation, wave pulsing' },
+    inverse:     { label: 'Inverse',     formula: 'f(E) = 1 − E',                     desc: 'Quiet = bright/large, loud = dim/small' },
+  };
+
+  const routingFormulas: Record<ChannelRouting, { size: string; color: string; brightness: string }> = {
+    normal:   { size: 'bass',      color: 'mid',      brightness: 'treble' },
+    swapped:  { size: 'treble',    color: 'bass',     brightness: 'mid' },
+    mono:     { size: 'avg(all)',   color: 'avg(all)', brightness: 'avg(all)' },
+    spectral: { size: 'bass',      color: 'mid',      brightness: 'treble' },
+  };
+
+  const outputFormulas = [
+    { param: 'Particle Size',  formula: '0.01 + sizeEnergy × 0.12' },
+    { param: 'Rotation Y',     formula: '0.0005 + sizeEnergy × 0.003' },
+    { param: 'Rotation X',     formula: '0.0005 + colorEnergy × 0.0015' },
+    { param: 'Hue',            formula: '0.55 + colorEnergy × 0.45' },
+    { param: 'Saturation',     formula: '0.6 + brightnessEnergy × 0.3' },
+    { param: 'Lightness',      formula: '0.4 + brightnessEnergy × 0.35' },
+  ];
+
   // ─── File Upload ───
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -77,7 +108,7 @@ export default function HomePage() {
       const track: Track = {
         id: crypto.randomUUID(),
         title,
-        artist: 'Unknown',
+        artist: '',
         url: URL.createObjectURL(file),
         file,
       };
@@ -127,6 +158,16 @@ export default function HomePage() {
     }
   }, [currentTrack, isPlaying, loadTrack, playTrack, pauseTrack]);
 
+  // ─── Track Update ───
+  const handleUpdateTrack = useCallback((trackId: string, field: 'title' | 'artist', value: string) => {
+    setTracks((prev) =>
+      prev.map((t) => (t.id === trackId ? { ...t, [field]: value } : t))
+    );
+    if (currentTrack?.id === trackId) {
+      setCurrentTrack((prev) => prev ? { ...prev, [field]: value } : prev);
+    }
+  }, [currentTrack]);
+
   // ─── Track Deletion ───
   const handleDeleteTrack = useCallback((trackId: string) => {
     setTracks((prev) => prev.filter((t) => t.id !== trackId));
@@ -159,6 +200,21 @@ export default function HomePage() {
   }, [setVolume]);
 
   // ─── Render ───
+  if (isLoading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card" style={{ alignItems: 'center' }}>
+          <span className="auth-logo">Melodiver</span>
+          <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
   return (
     <div className="main-layout">
       {/* ── Left: Visualizer ── */}
@@ -265,6 +321,17 @@ export default function HomePage() {
               </button>
             </div>
             <div className="sidebar-content">
+              {/* User */}
+              <div className="auth-user-badge">
+                <User size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <div className="auth-user-info">
+                  <div className="auth-user-name">{user.username}</div>
+                  <div className="auth-user-email">{user.email}</div>
+                </div>
+                <button className="auth-logout-btn" onClick={logout} title="Sign out">
+                  <LogOut size={12} /> Out
+                </button>
+              </div>
               {/* Upload */}
               <div className="sidebar-section">
                 <span className="section-label">Upload</span>
@@ -294,6 +361,7 @@ export default function HomePage() {
                   currentTrack={currentTrack}
                   onSelectTrack={handleSelectTrack}
                   onDeleteTrack={handleDeleteTrack}
+                  onUpdateTrack={handleUpdateTrack}
                   isPlaying={isPlaying}
                 />
               </div>
@@ -413,6 +481,61 @@ export default function HomePage() {
                           )
                         )}
                       </div>
+                    </div>
+
+                    {/* Formula Reference */}
+                    <div className="control-group">
+                      <button
+                        className="formula-toggle"
+                        onClick={() => setFormulaOpen((o) => !o)}
+                      >
+                        <span className="control-label">Math Reference</span>
+                        {formulaOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                      {formulaOpen && (
+                        <div className="formula-panel">
+                          <div className="formula-section">
+                            <span className="formula-section-title">Transfer Function</span>
+                            <div className="formula-row highlight">
+                              <code>{transferFormulas[particleSettings.mappingMode].formula}</code>
+                              <span className="formula-desc">{transferFormulas[particleSettings.mappingMode].desc}</span>
+                            </div>
+                            <div className="formula-divider" />
+                            {Object.entries(transferFormulas).map(([key, v]) => (
+                              <div key={key} className={`formula-row ${key === particleSettings.mappingMode ? 'active' : ''}`}>
+                                <span className="formula-name">{v.label}</span>
+                                <code>{v.formula}</code>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="formula-section">
+                            <span className="formula-section-title">Channel Routing ({particleSettings.channelRouting})</span>
+                            <div className="formula-row">
+                              <span className="formula-name">Size ←</span>
+                              <code>{routingFormulas[particleSettings.channelRouting].size}</code>
+                            </div>
+                            <div className="formula-row">
+                              <span className="formula-name">Color ←</span>
+                              <code>{routingFormulas[particleSettings.channelRouting].color}</code>
+                            </div>
+                            <div className="formula-row">
+                              <span className="formula-name">Brightness ←</span>
+                              <code>{routingFormulas[particleSettings.channelRouting].brightness}</code>
+                            </div>
+                          </div>
+
+                          <div className="formula-section">
+                            <span className="formula-section-title">Output Mapping</span>
+                            {outputFormulas.map((f) => (
+                              <div key={f.param} className="formula-row">
+                                <span className="formula-name">{f.param}</span>
+                                <code>{f.formula}</code>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
