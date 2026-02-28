@@ -46,3 +46,6 @@ public/uploads/
 
 # Database
 *.db
+
+melodiver.db-shm
+melodiver.db-wal

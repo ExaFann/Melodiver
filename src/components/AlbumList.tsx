@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Music, Trash2, Pencil, Check, ChevronDown, ChevronRight,
-  Disc3, Plus, Upload, Image as ImageIcon, X,
+  Disc3, Plus, Upload, Image as ImageIcon, X, Link, Loader,
 } from 'lucide-react';
 import type { Album, Track } from '@/types/music';
 
@@ -17,6 +17,7 @@ interface AlbumListProps {
   onDeleteAlbum: (albumId: string) => void;
   onUploadAlbumCover: (albumId: string, file: File) => void;
   onUploadTrack: (albumId: string, files: File[]) => void;
+  onImportUrl: (albumId: string, url: string) => Promise<void>;
   onUpdateTrack: (trackId: string, field: 'title' | 'artist', value: string) => void;
   onDeleteTrack: (trackId: string) => void;
 }
@@ -219,6 +220,100 @@ function AlbumUploadZone({ albumId, onUpload }: { albumId: string; onUpload: (al
   );
 }
 
+/* -------- URL Import Form (YouTube, SoundCloud, etc.) -------- */
+
+function ImportUrlForm({
+  albumId,
+  onImport,
+}: {
+  albumId: string;
+  onImport: (albumId: string, url: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+
+    setError('');
+    setLoading(true);
+    try {
+      await onImport(albumId, trimmed);
+      setUrl('');
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        className="album-import-url-btn"
+        onClick={() => setOpen(true)}
+        title="Import from URL (YouTube, SoundCloud, etc.)"
+      >
+        <Link size={14} />
+        <span>Import URL</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="import-url-form" onClick={(e) => e.stopPropagation()}>
+      <div className="import-url-input-row">
+        <input
+          ref={inputRef}
+          className="import-url-input"
+          value={url}
+          placeholder="Paste YouTube / SoundCloud URL..."
+          disabled={loading}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !loading) handleSubmit();
+            if (e.key === 'Escape') { setOpen(false); setUrl(''); setError(''); }
+          }}
+        />
+        <button
+          className="import-url-submit"
+          onClick={handleSubmit}
+          disabled={loading || !url.trim()}
+          title="Import"
+        >
+          {loading ? <Loader size={14} className="spin" /> : <Check size={14} />}
+        </button>
+        <button
+          className="import-url-cancel"
+          onClick={() => { setOpen(false); setUrl(''); setError(''); }}
+          disabled={loading}
+        >
+          <X size={14} />
+        </button>
+      </div>
+      {loading && (
+        <div className="import-url-status">
+          Downloading audio… this may take a minute.
+        </div>
+      )}
+      {error && (
+        <div className="import-url-error">{error}</div>
+      )}
+    </div>
+  );
+}
+
 /* -------- Main AlbumList -------- */
 
 export default function AlbumList({
@@ -231,6 +326,7 @@ export default function AlbumList({
   onDeleteAlbum,
   onUploadAlbumCover,
   onUploadTrack,
+  onImportUrl,
   onUpdateTrack,
   onDeleteTrack,
 }: AlbumListProps) {
@@ -397,6 +493,7 @@ export default function AlbumList({
 
                 {/* Upload zone inside album */}
                 <AlbumUploadZone albumId={album.id} onUpload={onUploadTrack} />
+                <ImportUrlForm albumId={album.id} onImport={onImportUrl} />
               </div>
             )}
           </div>

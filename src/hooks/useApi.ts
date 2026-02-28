@@ -83,6 +83,34 @@ export const authApi = {
   logout() {
     clearToken();
   },
+
+  async updateProfile(data: { username?: string; email?: string }): Promise<ApiUser> {
+    const result = await apiFetch<{ user: ApiUser }>('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return result.user;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await apiFetch('/api/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
+  async deleteAccount(password: string): Promise<void> {
+    await apiFetch('/api/auth/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    });
+    clearToken();
+  },
+
+  async getStats(): Promise<{ albumCount: number; trackCount: number; storageBytes: number; createdAt: string | null }> {
+    const result = await apiFetch<{ stats: { albumCount: number; trackCount: number; storageBytes: number; createdAt: string | null } }>('/api/auth/stats');
+    return result.stats;
+  },
 };
 
 // --- Albums API ---
@@ -133,6 +161,14 @@ export const albumsApi = {
 // --- Tracks API ---
 
 export const tracksApi = {
+  async importFromUrl(albumId: string, url: string): Promise<Track> {
+    const result = await apiFetch<{ track: Track }>('/api/tracks/import', {
+      method: 'POST',
+      body: JSON.stringify({ albumId, url }),
+    });
+    return result.track;
+  },
+
   async create(albumId: string, file: File, metadata?: { title?: string; artist?: string }): Promise<Track> {
     const formData = new FormData();
     formData.append('file', file);

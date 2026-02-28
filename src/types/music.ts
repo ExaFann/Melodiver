@@ -34,7 +34,7 @@ export type DrawMode = 'line' | 'mirror' | 'bars';
 
 export type MappingMode = 'linear' | 'exponential' | 'threshold' | 'harmonic' | 'inverse';
 
-export type ChannelRouting = 'normal' | 'swapped' | 'mono' | 'spectral';
+export type ChannelRouting = 'normal' | 'swapped' | 'mono';
 
 export type VisualizerTab = 'waveform' | 'particles';
 

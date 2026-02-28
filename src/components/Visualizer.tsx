@@ -174,16 +174,23 @@ function drawBars(
   analyser.getByteFrequencyData(dataArray);
 
   const barCount = 64;
-  const binsPerBar = Math.floor(bufferLength / barCount);
-  const barWidth = (width / barCount) * 0.8;
-  const barGap = (width / barCount) * 0.2;
+  // Use logarithmic frequency distribution so bars span full width
+  // and higher frequencies (which are sparse) get proper representation
+  const totalWidth = width;
+  const barWidth = (totalWidth / barCount) * 0.8;
+  const barGap = (totalWidth / barCount) * 0.2;
 
   for (let i = 0; i < barCount; i++) {
+    // Map bar index to frequency bins using logarithmic scale
+    const lowBin = Math.floor(Math.pow(i / barCount, 2) * bufferLength);
+    const highBin = Math.floor(Math.pow((i + 1) / barCount, 2) * bufferLength);
+    const binCount = Math.max(1, highBin - lowBin);
+
     let sum = 0;
-    for (let j = 0; j < binsPerBar; j++) {
-      sum += dataArray[i * binsPerBar + j];
+    for (let j = lowBin; j < Math.min(highBin, bufferLength); j++) {
+      sum += dataArray[j];
     }
-    const avg = sum / binsPerBar / 255;
+    const avg = sum / binCount / 255;
     const barHeight = avg * height * 0.85;
     const x = i * (barWidth + barGap);
     const y = height - barHeight;

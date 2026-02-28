@@ -3,13 +3,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Play, Pause, Square, Volume2, Music, Menu, X, ChevronDown, ChevronUp, LogOut, User,
+  Play, Pause, Square, Volume2, Music, Menu, X, ChevronDown, ChevronUp, LogOut, User, Settings,
 } from 'lucide-react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useAuth } from '@/hooks/useAuth';
 import Visualizer from '@/components/Visualizer';
 import AlbumList from '@/components/AlbumList';
 import AuthPage from '@/components/AuthPage';
+import UserManagementPanel from '@/components/UserManagementPanel';
 import { albumsApi, tracksApi } from '@/hooks/useApi';
 import type {
   Album,
@@ -35,7 +36,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function HomePage() {
-  const { user, isLoading, logout } = useAuth();
+  const { user, isLoading, logout, updateUser } = useAuth();
 
   // ─── Albums & Playback ───
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -72,6 +73,7 @@ export default function HomePage() {
   });
 
   const [formulaOpen, setFormulaOpen] = useState(false);
+  const [userPanelOpen, setUserPanelOpen] = useState(false);
 
   // ─── Formula Descriptions ───
   const transferFormulas: Record<MappingMode, { label: string; formula: string; desc: string }> = {
@@ -86,7 +88,6 @@ export default function HomePage() {
     normal:   { size: 'bass',      color: 'mid',      brightness: 'treble' },
     swapped:  { size: 'treble',    color: 'bass',     brightness: 'mid' },
     mono:     { size: 'avg(all)',   color: 'avg(all)', brightness: 'avg(all)' },
-    spectral: { size: 'bass',      color: 'mid',      brightness: 'treble' },
   };
 
   const outputFormulas = [
@@ -220,6 +221,16 @@ export default function HomePage() {
       console.error('Failed to delete track:', err);
     }
   }, [currentTrack, stopTrack]);
+
+  // ─── URL Import ───
+  const handleImportUrl = useCallback(async (albumId: string, url: string) => {
+    const track = await tracksApi.importFromUrl(albumId, url);
+    setAlbums((prev) =>
+      prev.map((a) =>
+        a.id === albumId ? { ...a, tracks: [...a.tracks, track] } : a
+      )
+    );
+  }, []);
 
   // ─── Track Selection ───
   const handleSelectTrack = useCallback(async (track: Track) => {
@@ -402,6 +413,13 @@ export default function HomePage() {
                   <div className="auth-user-name">{user.username}</div>
                   <div className="auth-user-email">{user.email}</div>
                 </div>
+                <button
+                  className="user-manage-btn"
+                  onClick={() => setUserPanelOpen(true)}
+                  title="Account settings"
+                >
+                  <Settings size={14} />
+                </button>
                 <button className="auth-logout-btn" onClick={logout} title="Sign out">
                   <LogOut size={12} /> Out
                 </button>
@@ -425,6 +443,7 @@ export default function HomePage() {
                     onDeleteAlbum={handleDeleteAlbum}
                     onUploadAlbumCover={handleUploadAlbumCover}
                     onUploadTrack={handleUploadTrack}
+                    onImportUrl={handleImportUrl}
                     onUpdateTrack={handleUpdateTrack}
                     onDeleteTrack={handleDeleteTrack}
                   />
@@ -529,7 +548,7 @@ export default function HomePage() {
                     <div className="control-group">
                       <span className="control-label">Channel Routing</span>
                       <div className="button-group">
-                        {(['normal', 'swapped', 'mono', 'spectral'] as ChannelRouting[]).map(
+                        {(['normal', 'swapped', 'mono'] as ChannelRouting[]).map(
                           (routing) => (
                             <button
                               key={routing}
@@ -619,6 +638,21 @@ export default function HomePage() {
           </div>
         )}
       </aside>
+
+      {/* User Management Panel */}
+      {userPanelOpen && (
+        <UserManagementPanel
+          user={user}
+          onClose={() => setUserPanelOpen(false)}
+          onUserUpdated={(updatedUser) => {
+            updateUser(updatedUser);
+          }}
+          onAccountDeleted={() => {
+            logout();
+            setUserPanelOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

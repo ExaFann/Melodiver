@@ -40,8 +40,6 @@ function applyChannelRouting(
       const avg = (bass + mid + treble) / 3;
       return { sizeEnergy: avg, colorEnergy: avg, brightnessEnergy: avg };
     }
-    case 'spectral':
-      return { sizeEnergy: bass, colorEnergy: mid, brightnessEnergy: treble };
     default:
       return { sizeEnergy: bass, colorEnergy: mid, brightnessEnergy: treble };
   }
