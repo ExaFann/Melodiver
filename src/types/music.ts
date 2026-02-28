@@ -1,14 +1,31 @@
 export interface Track {
   id: string;
+  albumId: string;
+  userId?: string;
   title: string;
   artist: string;
-  url: string;
+  filePath: string;
   duration?: number;
-  genre?: string;
-  album?: string;
-  coverArt?: string;
+  coverPath?: string | null;
+  orderIndex: number;
   isDemo?: boolean;
-  file?: File;
+  createdAt?: string;
+}
+
+export interface Album {
+  id: string;
+  userId: string;
+  name: string;
+  coverPath?: string | null;
+  tracks: Track[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiUser {
+  id: string;
+  username: string;
+  email: string;
 }
 
 export type AudioLoadSource = File | string;

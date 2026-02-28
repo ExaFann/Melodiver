@@ -632,6 +632,262 @@ body {
 }
 
 /* ===========================
+   Album List 
+   =========================== */
+
+.album-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-album-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  border: 1.5px dashed var(--surface-border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  transition: all var(--transition);
+}
+
+.add-album-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.new-album-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+}
+
+.new-album-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+
+.new-album-input::placeholder {
+  color: var(--text-muted);
+}
+
+.new-album-confirm,
+.new-album-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.new-album-confirm {
+  background: var(--accent);
+  color: white;
+}
+
+.new-album-confirm:hover {
+  background: var(--accent-hover);
+}
+
+.new-album-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.new-album-cancel {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.new-album-cancel:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.album-card {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.album-card:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.album-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.album-header:hover {
+  background: var(--surface-hover);
+}
+
+.album-cover {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.album-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-cover-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.album-cover:hover .album-cover-overlay {
+  opacity: 1;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.album-header-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.album-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-track-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.album-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.album-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  opacity: 0;
+}
+
+.album-header:hover .album-delete-btn {
+  opacity: 1;
+}
+
+.album-delete-btn:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.album-expand-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+
+.album-tracks {
+  border-top: 1px solid var(--surface-border);
+  padding: 4px 6px 8px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.album-tracks .playlist-item {
+  padding: 6px 8px;
+  margin-bottom: 2px;
+}
+
+.album-tracks .playlist-item-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.album-upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  margin-top: 4px;
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.album-upload-zone:hover,
+.album-upload-zone.drag-over {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ===========================
    Visual Mapping Controls
    =========================== */
 

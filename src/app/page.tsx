@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Play, Pause, Square, Upload, Volume2, Music, Menu, X, ChevronDown, ChevronUp, LogOut, User,
+  Play, Pause, Square, Volume2, Music, Menu, X, ChevronDown, ChevronUp, LogOut, User,
 } from 'lucide-react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useAuth } from '@/hooks/useAuth';
 import Visualizer from '@/components/Visualizer';
-import DemoTrackList from '@/components/DemoTrackList';
+import AlbumList from '@/components/AlbumList';
 import AuthPage from '@/components/AuthPage';
+import { albumsApi, tracksApi } from '@/hooks/useApi';
 import type {
+  Album,
   Track,
   VisualizerTab,
   WaveformSettings,
@@ -35,10 +37,10 @@ function formatTime(seconds: number): string {
 export default function HomePage() {
   const { user, isLoading, logout } = useAuth();
 
-  // ─── Tracks & Playback ───
-  const [tracks, setTracks] = useState<Track[]>([]);
+  // ─── Albums & Playback ───
+  const [albums, setAlbums] = useState<Album[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [albumsLoading, setAlbumsLoading] = useState(false);
 
   const {
     isPlaying,
@@ -96,48 +98,132 @@ export default function HomePage() {
     { param: 'Lightness',      formula: '0.4 + brightnessEnergy × 0.35' },
   ];
 
-  // ─── File Upload ───
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newTracks: Track[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const title = file.name.replace(/\.[^/.]+$/, '');
-      const track: Track = {
-        id: crypto.randomUUID(),
-        title,
-        artist: '',
-        url: URL.createObjectURL(file),
-        file,
-      };
-      newTracks.push(track);
+  // ─── Load Albums on Login ───
+  useEffect(() => {
+    if (!user) {
+      setAlbums([]);
+      return;
     }
+    let cancelled = false;
+    const fetchAlbums = async () => {
+      setAlbumsLoading(true);
+      try {
+        const data = await albumsApi.list();
+        if (!cancelled) setAlbums(data);
+      } catch (err) {
+        console.error('Failed to load albums:', err);
+      } finally {
+        if (!cancelled) setAlbumsLoading(false);
+      }
+    };
+    fetchAlbums();
+    return () => { cancelled = true; };
+  }, [user]);
 
-    setTracks((prev) => [...prev, ...newTracks]);
-
-    // Auto-select and play the first new track
-    const first = newTracks[0];
-    setCurrentTrack(first);
+  // ─── Album CRUD ───
+  const handleCreateAlbum = useCallback(async (name: string) => {
     try {
-      const dur = await loadTrack(first.file!);
-      setTracks((prev) =>
-        prev.map((t) => (t.id === first.id ? { ...t, duration: dur } : t))
-      );
-      playTrack();
+      const album = await albumsApi.create(name);
+      setAlbums((prev) => [...prev, album]);
     } catch (err) {
-      console.error('Failed to load track:', err);
+      console.error('Failed to create album:', err);
     }
+  }, []);
 
-    // Reset input so same file can be re-uploaded
-    e.target.value = '';
-  }, [loadTrack, playTrack]);
+  const handleUpdateAlbum = useCallback(async (albumId: string, name: string) => {
+    try {
+      await albumsApi.update(albumId, { name });
+      setAlbums((prev) =>
+        prev.map((a) => (a.id === albumId ? { ...a, name } : a))
+      );
+    } catch (err) {
+      console.error('Failed to update album:', err);
+    }
+  }, []);
+
+  const handleDeleteAlbum = useCallback(async (albumId: string) => {
+    try {
+      // If currently playing track is in this album, stop playback
+      const album = albums.find((a) => a.id === albumId);
+      if (album && currentTrack && album.tracks.some((t) => t.id === currentTrack.id)) {
+        stopTrack();
+        setCurrentTrack(null);
+      }
+      await albumsApi.delete(albumId);
+      setAlbums((prev) => prev.filter((a) => a.id !== albumId));
+    } catch (err) {
+      console.error('Failed to delete album:', err);
+    }
+  }, [albums, currentTrack, stopTrack]);
+
+  const handleUploadAlbumCover = useCallback(async (albumId: string, file: File) => {
+    try {
+      const coverPath = await albumsApi.uploadCover(albumId, file);
+      setAlbums((prev) =>
+        prev.map((a) => (a.id === albumId ? { ...a, coverPath } : a))
+      );
+    } catch (err) {
+      console.error('Failed to upload cover:', err);
+    }
+  }, []);
+
+  // ─── Track CRUD ───
+  const handleUploadTrack = useCallback(async (albumId: string, files: File[]) => {
+    for (const file of files) {
+      try {
+        const title = file.name.replace(/\.[^/.]+$/, '');
+        const track = await tracksApi.create(albumId, file, { title });
+        setAlbums((prev) =>
+          prev.map((a) =>
+            a.id === albumId ? { ...a, tracks: [...a.tracks, track] } : a
+          )
+        );
+      } catch (err) {
+        console.error('Failed to upload track:', err);
+      }
+    }
+  }, []);
+
+  const handleUpdateTrack = useCallback(async (trackId: string, field: 'title' | 'artist', value: string) => {
+    try {
+      await tracksApi.update(trackId, { [field]: value });
+      setAlbums((prev) =>
+        prev.map((a) => ({
+          ...a,
+          tracks: a.tracks.map((t) =>
+            t.id === trackId ? { ...t, [field]: value } : t
+          ),
+        }))
+      );
+      if (currentTrack?.id === trackId) {
+        setCurrentTrack((prev) => prev ? { ...prev, [field]: value } : prev);
+      }
+    } catch (err) {
+      console.error('Failed to update track:', err);
+    }
+  }, [currentTrack]);
+
+  const handleDeleteTrack = useCallback(async (trackId: string) => {
+    try {
+      await tracksApi.delete(trackId);
+      setAlbums((prev) =>
+        prev.map((a) => ({
+          ...a,
+          tracks: a.tracks.filter((t) => t.id !== trackId),
+        }))
+      );
+      if (currentTrack?.id === trackId) {
+        stopTrack();
+        setCurrentTrack(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete track:', err);
+    }
+  }, [currentTrack, stopTrack]);
 
   // ─── Track Selection ───
   const handleSelectTrack = useCallback(async (track: Track) => {
     if (currentTrack?.id === track.id) {
-      // Toggle play/pause for current track
       if (isPlaying) {
         pauseTrack();
       } else {
@@ -148,34 +234,22 @@ export default function HomePage() {
 
     setCurrentTrack(track);
     try {
-      const dur = await loadTrack(track.file || track.url);
-      setTracks((prev) =>
-        prev.map((t) => (t.id === track.id ? { ...t, duration: dur } : t))
+      // Load from filePath (could be /demo-music/... or /uploads/...)
+      const dur = await loadTrack(track.filePath);
+      // Update duration in albums state
+      setAlbums((prev) =>
+        prev.map((a) => ({
+          ...a,
+          tracks: a.tracks.map((t) =>
+            t.id === track.id ? { ...t, duration: dur } : t
+          ),
+        }))
       );
       playTrack();
     } catch (err) {
       console.error('Failed to load track:', err);
     }
   }, [currentTrack, isPlaying, loadTrack, playTrack, pauseTrack]);
-
-  // ─── Track Update ───
-  const handleUpdateTrack = useCallback((trackId: string, field: 'title' | 'artist', value: string) => {
-    setTracks((prev) =>
-      prev.map((t) => (t.id === trackId ? { ...t, [field]: value } : t))
-    );
-    if (currentTrack?.id === trackId) {
-      setCurrentTrack((prev) => prev ? { ...prev, [field]: value } : prev);
-    }
-  }, [currentTrack]);
-
-  // ─── Track Deletion ───
-  const handleDeleteTrack = useCallback((trackId: string) => {
-    setTracks((prev) => prev.filter((t) => t.id !== trackId));
-    if (currentTrack?.id === trackId) {
-      stopTrack();
-      setCurrentTrack(null);
-    }
-  }, [currentTrack, stopTrack]);
 
   // ─── Transport Controls ───
   const handlePlayPause = useCallback(() => {
@@ -332,38 +406,29 @@ export default function HomePage() {
                   <LogOut size={12} /> Out
                 </button>
               </div>
-              {/* Upload */}
-              <div className="sidebar-section">
-                <span className="section-label">Upload</span>
-                <div
-                  className="upload-zone"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload size={20} />
-                  <p>Click to upload audio</p>
-                  <span className="upload-hint">MP3, WAV, OGG, FLAC</span>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="audio/*"
-                  multiple
-                  className="upload-input"
-                  onChange={handleFileUpload}
-                />
-              </div>
 
-              {/* Playlist */}
+              {/* Library (Albums) */}
               <div className="sidebar-section">
-                <span className="section-label">Playlist</span>
-                <DemoTrackList
-                  tracks={tracks}
-                  currentTrack={currentTrack}
-                  onSelectTrack={handleSelectTrack}
-                  onDeleteTrack={handleDeleteTrack}
-                  onUpdateTrack={handleUpdateTrack}
-                  isPlaying={isPlaying}
-                />
+                <span className="section-label">Library</span>
+                {albumsLoading ? (
+                  <div className="playlist-empty">
+                    <p className="text-muted">Loading albums...</p>
+                  </div>
+                ) : (
+                  <AlbumList
+                    albums={albums}
+                    currentTrack={currentTrack}
+                    isPlaying={isPlaying}
+                    onSelectTrack={handleSelectTrack}
+                    onCreateAlbum={handleCreateAlbum}
+                    onUpdateAlbum={handleUpdateAlbum}
+                    onDeleteAlbum={handleDeleteAlbum}
+                    onUploadAlbumCover={handleUploadAlbumCover}
+                    onUploadTrack={handleUploadTrack}
+                    onUpdateTrack={handleUpdateTrack}
+                    onDeleteTrack={handleDeleteTrack}
+                  />
+                )}
               </div>
 
               {/* Visual Mapping */}
