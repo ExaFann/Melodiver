@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { getAudioDuration } from '@/lib/media';
 import fs from 'fs';
 import path from 'path';
 
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(fullPath, buffer);
 
+    // Extract duration via ffprobe
+    const duration = await getAudioDuration(fullPath);
+
     // Get max orderIndex
     const maxOrder = db.prepare(
       'SELECT MAX(orderIndex) as maxIdx FROM tracks WHERE albumId = ?'
@@ -55,8 +59,8 @@ export async function POST(request: NextRequest) {
     const trackTitle = title.trim() || file.name.replace(/\.[^.]+$/, '');
 
     db.prepare(
-      'INSERT INTO tracks (id, albumId, userId, title, artist, filePath, orderIndex, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, albumId, user.id, trackTitle, artist.trim(), filePath, orderIndex, new Date().toISOString());
+      'INSERT INTO tracks (id, albumId, userId, title, artist, filePath, duration, orderIndex, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, albumId, user.id, trackTitle, artist.trim(), filePath, duration, orderIndex, new Date().toISOString());
 
     const track = db.prepare('SELECT * FROM tracks WHERE id = ?').get(id) as Record<string, unknown>;
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { YT_DLP_PATH, getAudioDuration, FFMPEG_LOCATION } from '@/lib/media';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
@@ -9,51 +10,6 @@ import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
-// Locate the yt-dlp binary — check common locations
-function findYtDlp(): string {
-  const candidates = [
-    // pip --user install on Windows
-    path.join(
-      process.env.APPDATA || '',
-      'Python',
-      'Python313',
-      'Scripts',
-      'yt-dlp.exe'
-    ),
-    path.join(
-      process.env.APPDATA || '',
-      'Python',
-      'Python312',
-      'Scripts',
-      'yt-dlp.exe'
-    ),
-    path.join(
-      process.env.APPDATA || '',
-      'Python',
-      'Python311',
-      'Scripts',
-      'yt-dlp.exe'
-    ),
-    // global pip install
-    'yt-dlp',
-    'yt-dlp.exe',
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      if (candidate.includes(path.sep) && fs.existsSync(candidate)) {
-        return candidate;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // Fallback — hope it's on PATH
-  return candidates.find((c) => c.includes('Python313')) || 'yt-dlp';
-}
-
-const YT_DLP = findYtDlp();
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 
 // Ensure uploads directory exists
@@ -72,7 +28,7 @@ interface YtDlpMetadata {
   id?: string;
 }
 
-// URL validation — allow YouTube, SoundCloud, Bilibili, Bandcamp, etc.
+// URL validation
 function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -116,62 +72,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Album not found' }, { status: 404 });
     }
 
-    // Step 1: Fetch metadata via yt-dlp --print-json (no download)
+    // Download audio as MP3 and get metadata in one pass
+    const fileId = uuidv4();
+    const outputTemplate = path.join(UPLOADS_DIR, `${fileId}.%(ext)s`);
+
     let metadata: YtDlpMetadata;
     try {
-      const { stdout } = await execFileAsync(YT_DLP, [
-        '--no-download',
-        '--print-json',
-        '--no-warnings',
-        '--no-playlist',
-        url,
-      ], { timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
-
-      metadata = JSON.parse(stdout);
-    } catch (err) {
-      console.error('yt-dlp metadata error:', err);
-      return NextResponse.json(
-        { error: 'Failed to fetch media info. The URL may be invalid, private, or unsupported.' },
-        { status: 422 }
-      );
-    }
-
-    // Step 2: Download audio as MP3
-    const fileId = uuidv4();
-    const filename = `${fileId}.mp3`;
-    const outputPath = path.join(UPLOADS_DIR, filename);
-
-    try {
-      await execFileAsync(YT_DLP, [
+      const ytdlpArgs = [
         '-x',
         '--audio-format', 'mp3',
         '--audio-quality', '0',
         '--no-playlist',
         '--no-warnings',
-        '-o', outputPath.replace('.mp3', '.%(ext)s'),
-        url,
-      ], { timeout: 120000, maxBuffer: 10 * 1024 * 1024 });
-    } catch (err) {
-      console.error('yt-dlp download error:', err);
+        '--print-json',
+        '-o', outputTemplate,
+      ];
+      if (FFMPEG_LOCATION) {
+        ytdlpArgs.push('--ffmpeg-location', FFMPEG_LOCATION);
+      }
+      ytdlpArgs.push(url);
+
+      const { stdout } = await execFileAsync(YT_DLP_PATH, ytdlpArgs, {
+        timeout: 180000,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+
+      // --print-json outputs JSON; take the last valid JSON line
+      const lines = stdout.trim().split('\n');
+      let parsed: YtDlpMetadata | null = null;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          parsed = JSON.parse(lines[i]);
+          break;
+        } catch {
+          // not JSON, skip
+        }
+      }
+      metadata = parsed || {};
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('yt-dlp error:', errMsg);
+
+      // Clean up any partial files
+      try {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        for (const f of files) {
+          if (f.startsWith(fileId)) {
+            fs.unlinkSync(path.join(UPLOADS_DIR, f));
+          }
+        }
+      } catch { /* ignore cleanup errors */ }
+
       return NextResponse.json(
-        { error: 'Failed to download audio. Please try again.' },
-        { status: 500 }
+        { error: 'Failed to download audio. The URL may be invalid, private, or unsupported.' },
+        { status: 422 }
       );
     }
 
-    // yt-dlp may produce the file with a different extension flow, find the actual file
-    let actualFile = outputPath;
+    // Find the produced MP3 file
+    const filename = `${fileId}.mp3`;
+    const expectedPath = path.join(UPLOADS_DIR, filename);
+    let actualFile = expectedPath;
+
     if (!fs.existsSync(actualFile)) {
-      // Look for file matching the fileId
       const files = fs.readdirSync(UPLOADS_DIR);
       const match = files.find((f) => f.startsWith(fileId));
       if (match) {
         actualFile = path.join(UPLOADS_DIR, match);
-        // Rename to .mp3 if needed
         if (!match.endsWith('.mp3')) {
-          const mp3Path = path.join(UPLOADS_DIR, filename);
-          fs.renameSync(actualFile, mp3Path);
-          actualFile = mp3Path;
+          fs.renameSync(actualFile, expectedPath);
+          actualFile = expectedPath;
         }
       } else {
         return NextResponse.json(
@@ -181,7 +151,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 3: Download thumbnail if available
+    // Get accurate duration via ffprobe, fallback to yt-dlp metadata
+    const duration = await getAudioDuration(actualFile) ?? metadata.duration ?? null;
+
+    // Download thumbnail if available
     let coverPath: string | null = null;
     if (metadata.thumbnail) {
       try {
@@ -197,11 +170,10 @@ export async function POST(request: NextRequest) {
         }
       } catch (err) {
         console.error('Thumbnail download failed (non-fatal):', err);
-        // Continue without cover
       }
     }
 
-    // Step 4: Create DB record
+    // Create DB record
     const maxOrder = db
       .prepare('SELECT MAX(orderIndex) as maxIdx FROM tracks WHERE albumId = ?')
       .get(albumId) as { maxIdx: number | null };
@@ -221,7 +193,7 @@ export async function POST(request: NextRequest) {
       trackTitle,
       trackArtist,
       `/uploads/${filename}`,
-      metadata.duration || null,
+      duration,
       coverPath,
       orderIndex,
       new Date().toISOString()

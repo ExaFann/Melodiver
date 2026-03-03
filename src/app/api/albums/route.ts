@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { getAudioDuration } from '@/lib/media';
+import path from 'path';
 
 interface AlbumRow {
   id: string;
@@ -49,6 +51,27 @@ export async function GET(request: NextRequest) {
       })),
     };
   });
+
+  // Backfill missing durations asynchronously (for demo tracks / old uploads)
+  const tracksToFill = albumsWithTracks.flatMap((a) =>
+    a.tracks.filter((t) => t.duration == null)
+  );
+  if (tracksToFill.length > 0) {
+    // Fire-and-forget: fill durations in background so next load has them
+    (async () => {
+      const updateStmt = db.prepare(
+        'UPDATE tracks SET duration = ? WHERE id = ?'
+      );
+      for (const t of tracksToFill) {
+        const fullPath = path.join(process.cwd(), 'public', t.filePath);
+        const dur = await getAudioDuration(fullPath);
+        if (dur != null) {
+          updateStmt.run(dur, t.id);
+          t.duration = dur;
+        }
+      }
+    })();
+  }
 
   return NextResponse.json({ albums: albumsWithTracks });
 }
