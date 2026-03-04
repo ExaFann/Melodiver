@@ -3,8 +3,10 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install build dependencies for better-sqlite3 (native addon)
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# Install build dependencies for better-sqlite3 (native addon) + python symlink for yt-dlp-exec postinstall
+RUN apt-get update && apt-get install -y python3 make g++ && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package.json package-lock.json* ./
