@@ -24,10 +24,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install runtime dependencies: ffmpeg, python3, pip → yt-dlp
+# Install runtime dependencies: ffmpeg, python3, pip → yt-dlp (latest)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg python3 python3-pip python3-venv && \
-    python3 -m pip install --break-system-packages yt-dlp && \
+    python3 -m pip install --break-system-packages --upgrade yt-dlp && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

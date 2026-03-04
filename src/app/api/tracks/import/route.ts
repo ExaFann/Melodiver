@@ -87,9 +87,28 @@ export async function POST(request: NextRequest) {
         '--print-json',
         '-o', outputTemplate,
       ];
+
+      // YouTube-specific: use alternative player clients to avoid bot detection
+      // on datacenter IPs (Azure, AWS, etc.)
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        ytdlpArgs.push(
+          '--extractor-args', 'youtube:player_client=web_creator,mediaconnect',
+        );
+      }
+
       if (FFMPEG_LOCATION) {
         ytdlpArgs.push('--ffmpeg-location', FFMPEG_LOCATION);
       }
+
+      // Support cookies file for sites that require authentication
+      const cookiesPath = path.join(process.cwd(), 'data', 'cookies.txt');
+      const cookiesPathAlt = path.join(process.cwd(), 'cookies.txt');
+      if (fs.existsSync(cookiesPath)) {
+        ytdlpArgs.push('--cookies', cookiesPath);
+      } else if (fs.existsSync(cookiesPathAlt)) {
+        ytdlpArgs.push('--cookies', cookiesPathAlt);
+      }
+
       ytdlpArgs.push(url);
 
       const { stdout } = await execFileAsync(YT_DLP_PATH, ytdlpArgs, {
@@ -123,8 +142,14 @@ export async function POST(request: NextRequest) {
         }
       } catch { /* ignore cleanup errors */ }
 
+      // Detect YouTube bot blocking
+      const isYouTubeBotBlock = errMsg.includes('Sign in to confirm') || errMsg.includes('not a bot');
+      const errorDetail = isYouTubeBotBlock
+        ? 'YouTube requires authentication from this server. Place a cookies.txt file (Netscape format) in the data directory to enable YouTube downloads.'
+        : 'Failed to download audio. The URL may be invalid, private, or unsupported.';
+
       return NextResponse.json(
-        { error: 'Failed to download audio. The URL may be invalid, private, or unsupported.' },
+        { error: errorDetail },
         { status: 422 }
       );
     }
