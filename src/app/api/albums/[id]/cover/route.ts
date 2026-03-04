@@ -54,7 +54,12 @@ export async function POST(
     const ext = file.name.split('.').pop() || 'jpg';
     const filename = `${uuidv4()}.${ext}`;
     const coverPath = `/uploads/covers/${filename}`;
-    const fullPath = path.join(process.cwd(), 'public', 'uploads', 'covers', filename);
+    const coversDir = path.join(process.cwd(), 'public', 'uploads', 'covers');
+    const fullPath = path.join(coversDir, filename);
+
+    if (!fs.existsSync(coversDir)) {
+      fs.mkdirSync(coversDir, { recursive: true });
+    }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(fullPath, buffer);
