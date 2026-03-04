@@ -7,7 +7,7 @@ let db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (db) return db;
 
-  const dbPath = path.join(process.cwd(), 'melodiver.db');
+  const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'melodiver.db');
   db = new Database(dbPath);
 
   // Enable WAL mode for better concurrent read performance

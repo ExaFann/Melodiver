@@ -1,0 +1,16 @@
+services:
+  melodiver:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - melodiver-data:/app/data
+      - melodiver-uploads:/app/public/uploads
+    environment:
+      - DATABASE_PATH=/app/data/melodiver.db
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+    restart: unless-stopped
+
+volumes:
+  melodiver-data:
+  melodiver-uploads:

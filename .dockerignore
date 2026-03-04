@@ -1,0 +1,14 @@
+node_modules
+.next
+.venv
+.git
+.gitignore
+*.md
+*.db
+*.db-shm
+*.db-wal
+public/uploads/*
+!public/uploads/.gitkeep
+.env*
+Dockerfile
+docker-compose.yml
