@@ -2,8 +2,6 @@
 
 A full-stack music streaming and visualization web app with real-time audio analysis.
 
-🔗 **[Live Demo](https://melodiver.reddesert-71235324.eastus.azurecontainerapps.io/)**
-
 ## Features
 
 - **Audio Streaming & Library Management** — Upload tracks or import directly from YouTube via yt-dlp; organize music into albums with custom cover art
